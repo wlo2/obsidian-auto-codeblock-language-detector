@@ -1,0 +1,27 @@
+{
+  "name": "auto-codeblock-language-detector",
+  "version": "0.1.0",
+  "description": "Obsidian plugin that detects languages for pasted and existing fenced code blocks.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "codeblock",
+    "language-detection"
+  ],
+  "author": "x00x",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "esbuild": "^0.25.3",
+    "obsidian": "^1.8.9",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "builtin-modules": "^5.1.0"
+  }
+}

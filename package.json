@@ -13,7 +13,7 @@
     "codeblock",
     "language-detection"
   ],
-  "author": "x00x",
+  "author": "wlo2",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.15.18",

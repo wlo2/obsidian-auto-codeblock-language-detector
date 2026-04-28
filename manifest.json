@@ -4,6 +4,6 @@
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
   "description": "Detect languages for pasted fenced code blocks and unlabeled code blocks in the current file.",
-  "author": "x00x",
+  "author": "wlo2",
   "isDesktopOnly": false
 }

@@ -9,7 +9,7 @@ It runs entirely offline and intelligently filters languages to provide highly a
 - **Smart Paste Handling:** Automatically detects the language of plain multi-line code pastes and wraps them in a labeled code block.
 - **Fence Annotation:** If you paste code that already has unlabeled fences (e.g., ` ``` `), it instantly adds the correct language tag (e.g., ` ```python `).
 - **Manual Detection Command:** Run `/detect_language` to scan the current note and add language labels to any existing unlabeled fenced code blocks.
-- **Fully Customizable:** Use the plugin settings to tweak the minimum confidence threshold, or completely disable languages you don't use (e.g., disable `Batch` to prioritize `Bash` on Mac/Linux).
+- **Customizable:** Use the plugin settings to tweak the minimum confidence threshold, or completely disable languages you don't use (e.g., disable `Batch` to prioritize `Bash` on Mac/Linux).
 - **Fast and Offline:** Uses a bundled, optimized machine learning model — no API keys required, and your code never leaves your device.
 
 ## Installation

@@ -75,5 +75,10 @@ export const ALL_LANGUAGES: LanguageDefinition[] = [
  */
 export const DEFAULT_SETTINGS: PluginSettings = {
   confidenceThreshold: 0.15,
-  disabledLanguageIds: ["bat", "dm", "v", "csv", "pas", "cbl"],
+  disabledLanguageIds: [
+    "asm", "bat", "cbl", "clj", "coffee", "csv", "dart", "dm",
+    "erl", "ex", "f90", "go", "groovy", "ini", "jl", "kt",
+    "lisp", "lua", "matlab", "md", "ml", "mm", "pas", "prolog",
+    "tex", "toml", "v", "vba"
+  ],
 };

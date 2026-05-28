@@ -1,6 +1,6 @@
 import type { CodeLanguageDetector } from "../services/codeLanguageDetector";
 
-interface CodeFenceBlock {
+export interface CodeFenceBlock {
   code: string;
   fenceToken: string;
   startLine: number;
@@ -44,7 +44,7 @@ export async function annotateMarkdownCodeFences(
   };
 }
 
-function parseUnlabeledCodeFences(markdown: string): CodeFenceBlock[] {
+export function parseUnlabeledCodeFences(markdown: string): CodeFenceBlock[] {
   const lines = markdown.split("\n");
   const blocks: CodeFenceBlock[] = [];
 

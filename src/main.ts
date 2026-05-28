@@ -1,6 +1,6 @@
 import { Editor, Notice, Plugin } from "obsidian";
 
-import { annotateMarkdownCodeFences, containsUnlabeledCodeFence } from "./markdown/codeFenceProcessor";
+import { annotateMarkdownCodeFences, containsUnlabeledCodeFence, parseUnlabeledCodeFences } from "./markdown/codeFenceProcessor";
 import { CodeLanguageDetector } from "./services/codeLanguageDetector";
 import { AutoCodeblockSettingTab } from "./settingsTab";
 import { DEFAULT_SETTINGS, PluginSettings } from "./settings";
@@ -41,12 +41,9 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
           return;
         }
 
-        // editor-paste fires AFTER paste is already in the document.
-        // Cursor is at the END of the just-pasted content.
-        const docNow = editor.getValue();
-        const cursorNow = editor.getCursor();
-
-        void this.handlePastedRegion(editor, docNow, cursorNow, clipboardText);
+        // Intercept paste event synchronously so we can perform offline detection
+        evt.preventDefault();
+        void this.handlePasteInterception(editor, clipboardText);
       })
     );
 
@@ -76,38 +73,12 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
     });
   }
 
-  private async handlePastedRegion(
+  private async handlePasteInterception(
     editor: Editor,
-    doc: string,
-    cursor: { line: number; ch: number },
     clipboardText: string
   ): Promise<void> {
     try {
-      // Cursor is at the END of the pasted content.
-      // Convert cursor to a char offset so we can search backwards for the clipboard text.
-      const lines = doc.split("\n");
-      let cursorCharOffset = cursor.ch;
-      for (let i = 0; i < cursor.line; i++) {
-        cursorCharOffset += lines[i].length + 1; // +1 for \n
-      }
-
-      // Search backward from cursor for the trimmed clipboard text
       const trimmedClip = clipboardText.trim();
-      const searchStart = Math.max(0, cursorCharOffset - trimmedClip.length - 5);
-      const posInDoc = doc.lastIndexOf(trimmedClip, cursorCharOffset);
-
-      LOG("handlePastedRegion: cursorOffset=", cursorCharOffset,
-          "searchStart=", searchStart, "found@", posInDoc);
-
-      if (posInDoc === -1 || posInDoc < searchStart) {
-        LOG("handlePastedRegion: clipboard text not found near cursor");
-        return;
-      }
-
-      const insertStart = posInDoc;
-      const insertEnd   = posInDoc + trimmedClip.length;
-
-      // Detect language / annotate fences
       let replacement: string | null = null;
 
       if (containsUnlabeledCodeFence(trimmedClip)) {
@@ -125,41 +96,13 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
       }
 
       if (replacement !== null) {
-        const charToPos = (charIdx: number) => {
-          const before = doc.slice(0, charIdx);
-          const ls = before.split("\n");
-          return { line: ls.length - 1, ch: ls[ls.length - 1].length };
-        };
-        const startPos = charToPos(insertStart);
-        const endPos   = charToPos(insertEnd);
-
-        // Re-read document after the async await — it may have changed
-        const liveDoc   = editor.getValue();
-        const liveLines = liveDoc.split("\n");
-
-        // Abort if positions are now out of bounds
-        if (
-          startPos.line >= liveLines.length ||
-          endPos.line   >= liveLines.length ||
-          startPos.ch   >  (liveLines[startPos.line]?.length ?? 0) ||
-          endPos.ch     >  (liveLines[endPos.line]?.length ?? 0)
-        ) {
-          LOG("replaceRange aborted: positions out of bounds after async wait");
-          return;
-        }
-
-        // Abort if the text we're replacing no longer matches (user edited meanwhile)
-        const liveSlice = liveDoc.slice(insertStart, insertEnd);
-        if (liveSlice !== trimmedClip) {
-          LOG("replaceRange aborted: document changed since paste");
-          return;
-        }
-
-        LOG("replaceRange", startPos, "->", endPos);
-        editor.replaceRange(replacement, startPos, endPos);
+        editor.replaceSelection(replacement);
+      } else {
+        editor.replaceSelection(clipboardText);
       }
     } catch (error) {
-      console.error("[AutoCodeblock] post-paste handling failed", error);
+      console.error("[AutoCodeblock] paste interception failed", error);
+      editor.replaceSelection(clipboardText);
     }
   }
 
@@ -167,25 +110,67 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
     const originalMarkdown = editor.getValue();
     LOG("detectLanguagesInEditor: markdown length=", originalMarkdown.length);
 
+    const codeFenceBlocks = parseUnlabeledCodeFences(originalMarkdown);
+    if (codeFenceBlocks.length === 0) {
+      new Notice("No unlabeled code blocks were found.");
+      return;
+    }
+
     // Log every fence-like line so we can see labels (or lack thereof)
     const fenceLines = originalMarkdown.split("\n")
       .map((l, i) => ({ i, l }))
       .filter(({ l }) => /^[ \t]{0,3}(`{3,}|~{3,})/.test(l));
     LOG("detectLanguagesInEditor: fence lines=", fenceLines.map(({ i, l }) => `L${i}: ${JSON.stringify(l)}`));
 
-    const result = await annotateMarkdownCodeFences(originalMarkdown, this.detector);
-    LOG("detectLanguagesInEditor: updatedCount=", result.updatedCount);
+    // Run async detections first
+    const detections: { startLine: number; fenceToken: string; language: string }[] = [];
+    for (const block of codeFenceBlocks) {
+      const detection = await this.detector.detect(block.code);
+      if (detection) {
+        detections.push({
+          startLine: block.startLine,
+          fenceToken: block.fenceToken,
+          language: detection.fenceLanguage
+        });
+      }
+    }
 
-    if (result.updatedCount === 0) {
+    if (detections.length === 0) {
       new Notice("No unlabeled code blocks were updated.");
       return;
     }
 
-    const cursor = editor.getCursor();
-    editor.setValue(result.markdown);
-    editor.setCursor(cursor);
+    // Sort detections descending by startLine to process bottom-up
+    detections.sort((a, b) => b.startLine - a.startLine);
 
-    const blockLabel = result.updatedCount === 1 ? "code block" : "code blocks";
-    new Notice(`Detected languages for ${result.updatedCount} ${blockLabel}.`);
+    // Apply the updates in-place safely
+    const liveDoc = editor.getValue();
+    const liveLines = liveDoc.split("\n");
+    let updatedCount = 0;
+
+    for (const { startLine, fenceToken, language } of detections) {
+      if (startLine >= liveLines.length) {
+        continue;
+      }
+
+      const liveLineContent = liveLines[startLine];
+      // Verify that the line still matches the expected opening fence exactly.
+      // This protects against overwriting user changes made during the async detection.
+      if (liveLineContent.trim() === fenceToken.trim()) {
+        const newLine = `${fenceToken}${language}`;
+        editor.setLine(startLine, newLine);
+        updatedCount += 1;
+      } else {
+        LOG("detectLanguagesInEditor: skipped line", startLine, "due to modifications during async wait");
+      }
+    }
+
+    if (updatedCount === 0) {
+      new Notice("No unlabeled code blocks were updated (contents changed during detection).");
+      return;
+    }
+
+    const blockLabel = updatedCount === 1 ? "code block" : "code blocks";
+    new Notice(`Detected languages for ${updatedCount} ${blockLabel}.`);
   }
 }

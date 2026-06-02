@@ -1,6 +1,6 @@
 {
   "name": "auto-codeblock-language-detector",
-  "version": "0.3.0",
+  "version": "0.3.5",
   "description": "Obsidian plugin that detects languages for pasted and existing fenced code blocks.",
   "main": "main.js",
   "scripts": {

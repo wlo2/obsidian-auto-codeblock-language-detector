@@ -1,7 +1,7 @@
 {
   "id": "auto-codeblock-language-detector",
   "name": "Auto Codeblock Language Detector",
-  "version": "0.3.0",
+  "version": "0.3.5",
   "minAppVersion": "1.5.0",
   "description": "Detect languages for pasted fenced code blocks and unlabeled code blocks in the current file.",
   "author": "wlo2",

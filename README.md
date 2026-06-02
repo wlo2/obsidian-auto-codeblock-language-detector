@@ -17,7 +17,7 @@ It runs entirely offline and intelligently filters languages to provide highly a
 
 When you paste text or run `/detect_language`, the plugin first finds unlabeled code fences or treats a plain multi-line paste as a candidate block.
 
-Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, code keywords, indentation, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs from being labeled as languages while still allowing compact code samples through to the model.
+Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, indented detail-list lines, code keywords, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs and paragraph-plus-detail-list notes from being labeled as languages while still allowing compact code samples through to the model.
 
 If the prose filter allows the block, the bundled Guesslang model scores possible languages. The plugin then takes the highest-scoring language that is not disabled in settings and only applies it when the score is at or above your configured confidence threshold.
 

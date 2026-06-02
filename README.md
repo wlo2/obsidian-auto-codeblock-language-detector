@@ -10,7 +10,16 @@ It runs entirely offline and intelligently filters languages to provide highly a
 - **Fence Annotation:** If you paste code that already has unlabeled fences (e.g., ` ``` `), it instantly adds the correct language tag (e.g., ` ```python `).
 - **Manual Detection Command:** Run `/detect_language` to scan the current note and add language labels to any existing unlabeled fenced code blocks.
 - **Customizable:** Use the plugin settings to tweak the minimum confidence threshold, or completely disable languages you don't use (e.g., disable `Batch` to prioritize `Bash` on Mac/Linux).
+- **Prose Rejection:** A pre-detection filter skips text that statistically looks like natural language instead of code, reducing false positives on pasted notes and paragraphs.
 - **Fast and Offline:** Uses a bundled, optimized machine learning model — no API keys required, and your code never leaves your device.
+
+## How detection works
+
+When you paste text or run `/detect_language`, the plugin first finds unlabeled code fences or treats a plain multi-line paste as a candidate block.
+
+Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, code keywords, indentation, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs from being labeled as languages while still allowing compact code samples through to the model.
+
+If the prose filter allows the block, the bundled Guesslang model scores possible languages. The plugin then takes the highest-scoring language that is not disabled in settings and only applies it when the score is at or above your configured confidence threshold.
 
 ## Installation
 

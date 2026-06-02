@@ -50,6 +50,7 @@ const CODE_KEYWORDS = new Set([
 ]);
 
 const CODE_OPERATOR_PATTERN = /(?:=>|->|::|:=|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|&&|\|\||[{}[\]();<>])/g;
+const INDENTED_DETAIL_PATTERN = /^(?: {2,}|\t)[A-Za-z][^:\n]{1,80}:\s+\S/;
 const SENTENCE_END_PATTERN = /[.!?]["')\]]?$/;
 const WORD_PATTERN = /[A-Za-z][A-Za-z']*/g;
 
@@ -150,6 +151,8 @@ export function looksLikeNaturalLanguage(content: string): boolean {
   const sentenceLineCount = nonEmptyLines.filter((line) => SENTENCE_END_PATTERN.test(line)).length;
   const paragraphBreakCount = lines.filter((line) => line.trim().length === 0).length;
   const longLineCount = nonEmptyLines.filter((line) => line.length >= 80).length;
+  const paragraphLineCount = nonEmptyLines.filter((line) => line.length >= 80 && /[.!?]/.test(line)).length;
+  const indentedDetailLineCount = lines.filter((line) => INDENTED_DETAIL_PATTERN.test(line)).length;
 
   const punctuationCount = (content.match(/[.,!?]/g) ?? []).length;
   const symbolCount = (content.match(/[{}[\]();<>:=+\-*/\\|&%$#@]/g) ?? []).length;
@@ -161,7 +164,7 @@ export function looksLikeNaturalLanguage(content: string): boolean {
   const sentenceLineRatio = sentenceLineCount / nonEmptyLines.length;
   const longLineRatio = longLineCount / nonEmptyLines.length;
 
-  return (
+  const paragraphProse = (
     commonWordRatio >= 0.28 &&
     sentenceLineRatio >= 0.35 &&
     prosePunctuationRatio >= 0.04 &&
@@ -169,4 +172,16 @@ export function looksLikeNaturalLanguage(content: string): boolean {
     codeSymbolRatio < 0.08 &&
     (paragraphBreakCount >= 1 || longLineRatio >= 0.45)
   );
+
+  const proseWithDetailList = (
+    commonWordRatio >= 0.24 &&
+    paragraphBreakCount >= 2 &&
+    paragraphLineCount >= 1 &&
+    indentedDetailLineCount >= 2 &&
+    prosePunctuationRatio >= 0.035 &&
+    codeSignalRatio < 0.22 &&
+    codeSymbolRatio < 0.08
+  );
+
+  return paragraphProse || proseWithDetailList;
 }

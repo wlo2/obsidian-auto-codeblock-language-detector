@@ -74,7 +74,7 @@ export const ALL_LANGUAGES: LanguageDefinition[] = [
  * - Blacklist languages unlikely to appear in a personal knowledge base.
  */
 export const DEFAULT_SETTINGS: PluginSettings = {
-  confidenceThreshold: 0.15,
+  confidenceThreshold: 0.1,
   disabledLanguageIds: [
     "asm", "bat", "cbl", "clj", "coffee", "csv", "dart", "dm",
     "erl", "ex", "f90", "go", "groovy", "ini", "jl", "kt",

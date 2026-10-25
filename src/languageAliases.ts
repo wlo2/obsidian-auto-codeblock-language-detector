@@ -1,11 +1,11 @@
 export const LANGUAGE_ALIASES: Record<string, string> = {
-  asm: "asm6502",
+  asm: "nasm",
   bat: "batch",
   cbl: "cobol",
   clj: "clojure",
   coffee: "coffeescript",
-  cpp: "cpp",
   cs: "csharp",
+  erl: "erlang",
   ex: "elixir",
   f90: "fortran",
   hs: "haskell",
@@ -14,8 +14,8 @@ export const LANGUAGE_ALIASES: Record<string, string> = {
   kt: "kotlin",
   md: "markdown",
   ml: "ocaml",
-  mm: "objective-c",
-  pl: "perl",
+  mm: "objectivec",
+  pas: "pascal",
   pm: "perl",
   ps1: "powershell",
   py: "python",
@@ -24,5 +24,6 @@ export const LANGUAGE_ALIASES: Record<string, string> = {
   sh: "bash",
   tex: "latex",
   ts: "typescript",
+  v: "verilog",
   yaml: "yml"
 };

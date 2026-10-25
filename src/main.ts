@@ -1,25 +1,17 @@
-import { Editor, Notice, Plugin } from "obsidian";
+import { Editor, EditorChange, Notice, Plugin } from "obsidian";
 
-import { annotateMarkdownCodeFences, containsUnlabeledCodeFence, parseUnlabeledCodeFences } from "./markdown/codeFenceProcessor";
+import { annotateMarkdownCodeFences, hasCodeFence, padFences, parseUnlabeledCodeFences, shouldHandlePaste } from "./markdown/codeFenceProcessor";
 import { CodeLanguageDetector } from "./services/codeLanguageDetector";
 import { AutoCodeblockSettingTab } from "./settingsTab";
 import { DEFAULT_SETTINGS, PluginSettings } from "./settings";
 
-const LOG = (...args: unknown[]) =>
-  console.log("[AutoCodeblock]", ...args);
-
 export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS };
 
-  private readonly detector = new CodeLanguageDetector({
-    confidenceThreshold: DEFAULT_SETTINGS.confidenceThreshold,
-    disabledLanguageIds: DEFAULT_SETTINGS.disabledLanguageIds,
-  });
+  private readonly detector = new CodeLanguageDetector(() => this.settings);
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    LOG("Loaded. threshold=", this.settings.confidenceThreshold,
-        "disabled=", this.settings.disabledLanguageIds);
 
     this.addSettingTab(new AutoCodeblockSettingTab(this.app, this));
 
@@ -27,17 +19,25 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
       id: "detect-language",
       name: "/detect_language",
       editorCallback: (editor) => {
-        void this.detectLanguagesInEditor(editor);
+        this.detectLanguagesInEditor(editor).catch((error) => {
+          console.error("[AutoCodeblock] language detection failed", error);
+          new Notice("Language detection failed.");
+        });
       },
     });
 
     this.registerEvent(
       this.app.workspace.on("editor-paste", (evt, editor) => {
-        const clipboardText = evt.clipboardData?.getData("text/plain");
-        LOG("editor-paste fired, defaultPrevented=", evt.defaultPrevented,
-            "clipLen=", clipboardText?.length ?? 0);
+        // Another plugin already handled this paste.
+        if (evt.defaultPrevented) {
+          return;
+        }
 
-        if (!clipboardText || clipboardText.trim().split("\n").length < 2) {
+        // Windows clipboards use \r\n; the fence parser splits on \n only.
+        const clipboardText = (evt.clipboardData?.getData("text/plain") ?? "").replace(/\r\n?/g, "\n");
+        const html = evt.clipboardData?.getData("text/html") ?? "";
+        const textBeforeCursor = editor.getRange({ line: 0, ch: 0 }, editor.getCursor("from"));
+        if (!shouldHandlePaste(clipboardText, html, textBeforeCursor)) {
           return;
         }
 
@@ -56,21 +56,16 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
     });
   }
 
+  onunload(): void {
+    void this.detector.dispose();
+  }
+
   async loadSettings(): Promise<void> {
-    const saved = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
-    this.detector.updateOptions({
-      confidenceThreshold: this.settings.confidenceThreshold,
-      disabledLanguageIds: this.settings.disabledLanguageIds,
-    });
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
-    this.detector.updateOptions({
-      confidenceThreshold: this.settings.confidenceThreshold,
-      disabledLanguageIds: this.settings.disabledLanguageIds,
-    });
   }
 
   private async handlePasteInterception(
@@ -78,28 +73,33 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
     clipboardText: string
   ): Promise<void> {
     try {
-      const trimmedClip = clipboardText.trim();
+      // Drop blank edge lines only; trim() would also eat the first line's indentation.
+      const trimmedClip = clipboardText.replace(/^(?:[ \t]*\n)+/, "").trimEnd();
       let replacement: string | null = null;
 
-      if (containsUnlabeledCodeFence(trimmedClip)) {
+      // shouldHandlePaste only lets fenced text through when it has an unlabeled fence.
+      if (hasCodeFence(trimmedClip)) {
         const result = await annotateMarkdownCodeFences(trimmedClip, this.detector);
         if (result.updatedCount > 0) {
           replacement = result.markdown;
-          LOG("annotated", result.updatedCount, "fences");
         }
       } else {
-        const detection = await this.detector.detect(trimmedClip);
-        LOG("plain detect result=", detection);
-        if (detection) {
-          replacement = `\`\`\`${detection.fenceLanguage}\n${trimmedClip}\n\`\`\``;
+        const language = await this.detector.detect(trimmedClip);
+        if (language) {
+          replacement = `\`\`\`${language}\n${trimmedClip}\n\`\`\``;
         }
       }
 
-      if (replacement !== null) {
-        editor.replaceSelection(replacement);
-      } else {
+      if (replacement === null) {
         editor.replaceSelection(clipboardText);
+        return;
       }
+
+      const from = editor.getCursor("from");
+      const to = editor.getCursor("to");
+      editor.replaceSelection(
+        padFences(replacement, editor.getLine(from.line).slice(0, from.ch), editor.getLine(to.line).slice(to.ch))
+      );
     } catch (error) {
       console.error("[AutoCodeblock] paste interception failed", error);
       editor.replaceSelection(clipboardText);
@@ -107,31 +107,18 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
   }
 
   private async detectLanguagesInEditor(editor: Editor): Promise<void> {
-    const originalMarkdown = editor.getValue();
-    LOG("detectLanguagesInEditor: markdown length=", originalMarkdown.length);
-
-    const codeFenceBlocks = parseUnlabeledCodeFences(originalMarkdown);
+    const codeFenceBlocks = parseUnlabeledCodeFences(editor.getValue());
     if (codeFenceBlocks.length === 0) {
       new Notice("No unlabeled code blocks were found.");
       return;
     }
 
-    // Log every fence-like line so we can see labels (or lack thereof)
-    const fenceLines = originalMarkdown.split("\n")
-      .map((l, i) => ({ i, l }))
-      .filter(({ l }) => /^[ \t]{0,3}(`{3,}|~{3,})/.test(l));
-    LOG("detectLanguagesInEditor: fence lines=", fenceLines.map(({ i, l }) => `L${i}: ${JSON.stringify(l)}`));
-
     // Run async detections first
-    const detections: { startLine: number; fenceToken: string; language: string }[] = [];
+    const detections: { startLine: number; code: string; language: string }[] = [];
     for (const block of codeFenceBlocks) {
-      const detection = await this.detector.detect(block.code);
-      if (detection) {
-        detections.push({
-          startLine: block.startLine,
-          fenceToken: block.fenceToken,
-          language: detection.fenceLanguage
-        });
+      const language = await this.detector.detect(block.code);
+      if (language) {
+        detections.push({ startLine: block.startLine, code: block.code, language });
       }
     }
 
@@ -140,37 +127,31 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
       return;
     }
 
-    // Sort detections descending by startLine to process bottom-up
-    detections.sort((a, b) => b.startLine - a.startLine);
+    // The note may have changed while detection ran: only label blocks that are
+    // still unlabeled, on the same line, with the same code.
+    const liveBlocks = parseUnlabeledCodeFences(editor.getValue());
+    const changes: EditorChange[] = [];
 
-    // Apply the updates in-place safely
-    const liveDoc = editor.getValue();
-    const liveLines = liveDoc.split("\n");
-    let updatedCount = 0;
-
-    for (const { startLine, fenceToken, language } of detections) {
-      if (startLine >= liveLines.length) {
-        continue;
-      }
-
-      const liveLineContent = liveLines[startLine];
-      // Verify that the line still matches the expected opening fence exactly.
-      // This protects against overwriting user changes made during the async detection.
-      if (liveLineContent.trim() === fenceToken.trim()) {
-        const newLine = `${fenceToken}${language}`;
-        editor.setLine(startLine, newLine);
-        updatedCount += 1;
-      } else {
-        LOG("detectLanguagesInEditor: skipped line", startLine, "due to modifications during async wait");
+    for (const { startLine, code, language } of detections) {
+      const liveBlock = liveBlocks.find((block) => block.startLine === startLine && block.code === code);
+      if (liveBlock) {
+        changes.push({
+          from: { line: startLine, ch: 0 },
+          to: { line: startLine, ch: editor.getLine(startLine).length },
+          text: `${liveBlock.fenceToken}${language}`,
+        });
       }
     }
 
-    if (updatedCount === 0) {
+    if (changes.length === 0) {
       new Notice("No unlabeled code blocks were updated (contents changed during detection).");
       return;
     }
 
-    const blockLabel = updatedCount === 1 ? "code block" : "code blocks";
-    new Notice(`Detected languages for ${updatedCount} ${blockLabel}.`);
+    // One transaction, so a single undo reverts the whole run.
+    editor.transaction({ changes });
+
+    const blockLabel = changes.length === 1 ? "code block" : "code blocks";
+    new Notice(`Detected languages for ${changes.length} ${blockLabel}.`);
   }
 }

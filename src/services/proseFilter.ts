@@ -1,0 +1,90 @@
+const COMMON_PROSE_WORDS = new Set([
+  "a", "about", "also", "and", "are", "as", "at", "be", "because", "been",
+  "but", "by", "can", "does", "even", "for", "from", "had", "has", "have",
+  "however", "if", "in", "is", "it", "its", "like", "mostly", "not", "of",
+  "on", "one", "or", "so", "some", "that", "the", "then", "there", "this",
+  "to", "too", "was", "what", "with", "would", "you", "your"
+]);
+
+const CODE_KEYWORDS = new Set([
+  "abstract", "async", "await", "break", "case", "catch", "class", "const",
+  "continue", "def", "delete", "do", "else", "enum", "except", "export",
+  "extends", "false", "finally", "for", "from", "func", "function", "if",
+  "import", "in", "interface", "let", "module", "namespace", "new", "nil",
+  "none", "null", "package", "private", "protected", "public", "return",
+  "self", "static", "struct", "switch", "this", "throw", "true", "try",
+  "type", "var", "void", "while", "yield"
+]);
+
+const CODE_OPERATOR_PATTERN = /(?:=>|->|::|:=|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|&&|\|\||[{}[\]();<>])/g;
+const INDENTED_DETAIL_PATTERN = /^(?: {2,}|\t)[A-Za-z][^:\n]{1,80}:\s+\S/;
+const SENTENCE_END_PATTERN = /[.!?]["')\]]?$/;
+const WORD_PATTERN = /[A-Za-z][A-Za-z']*/g;
+
+export function looksLikeNaturalLanguage(content: string): boolean {
+  const lines = content.split(/\r?\n/);
+  const nonEmptyLines = lines.map((line) => line.trim()).filter((line) => line.length > 0);
+
+  if (nonEmptyLines.length < 2) {
+    return false;
+  }
+
+  const words = content.match(WORD_PATTERN) ?? [];
+  if (words.length < 35) {
+    return false;
+  }
+
+  const lowerWords = words.map((word) => word.toLowerCase());
+  const commonWordCount = lowerWords.filter((word) => COMMON_PROSE_WORDS.has(word)).length;
+  const codeKeywordCount = lowerWords.filter((word) => CODE_KEYWORDS.has(word)).length;
+  const operatorCount = (content.match(CODE_OPERATOR_PATTERN) ?? []).length;
+  const assignmentLikeCount = (content.match(/(^|[^\w])\w+\s*[:=]\s*\S/g) ?? []).length;
+  const indentedLineCount = lines.filter((line) => /^( {2,}|\t)\S/.test(line)).length;
+  const sentenceLineCount = nonEmptyLines.filter((line) => SENTENCE_END_PATTERN.test(line)).length;
+  const paragraphBreakCount = lines.filter((line) => line.trim().length === 0).length;
+  const longLineCount = nonEmptyLines.filter((line) => line.length >= 80).length;
+  const paragraphLineCount = nonEmptyLines.filter((line) => line.length >= 80 && /[.!?]/.test(line)).length;
+  const indentedDetailLineCount = lines.filter((line) => INDENTED_DETAIL_PATTERN.test(line)).length;
+
+  const punctuationCount = (content.match(/[.,!?]/g) ?? []).length;
+  const symbolCount = (content.match(/[{}[\]();<>:=+\-*/\\|&%$#@]/g) ?? []).length;
+
+  const commonWordRatio = commonWordCount / words.length;
+  const codeSignalRatio = (operatorCount + assignmentLikeCount + indentedLineCount + codeKeywordCount) / words.length;
+  const prosePunctuationRatio = punctuationCount / words.length;
+  const codeSymbolRatio = symbolCount / Math.max(content.length, 1);
+  const sentenceLineRatio = sentenceLineCount / nonEmptyLines.length;
+  const longLineRatio = longLineCount / nonEmptyLines.length;
+
+  const paragraphProse = (
+    commonWordRatio >= 0.28 &&
+    sentenceLineRatio >= 0.35 &&
+    prosePunctuationRatio >= 0.04 &&
+    codeSignalRatio < 0.18 &&
+    codeSymbolRatio < 0.08 &&
+    (paragraphBreakCount >= 1 || longLineRatio >= 0.45)
+  );
+
+  const proseWithDetailList = (
+    commonWordRatio >= 0.24 &&
+    paragraphBreakCount >= 2 &&
+    paragraphLineCount >= 1 &&
+    indentedDetailLineCount >= 2 &&
+    prosePunctuationRatio >= 0.035 &&
+    codeSignalRatio < 0.22 &&
+    codeSymbolRatio < 0.08
+  );
+
+  const longFormProse = (
+    words.length >= 80 &&
+    commonWordRatio >= 0.22 &&
+    sentenceLineRatio >= 0.5 &&
+    paragraphBreakCount >= 2 &&
+    longLineRatio >= 0.5 &&
+    prosePunctuationRatio >= 0.06 &&
+    codeSignalRatio < 0.12 &&
+    codeSymbolRatio < 0.04
+  );
+
+  return paragraphProse || proseWithDetailList || longFormProse;
+}

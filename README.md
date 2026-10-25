@@ -17,7 +17,9 @@ It runs entirely offline and intelligently filters languages to provide highly a
 
 When you paste text or run `/detect_language`, the plugin first finds unlabeled code fences or treats a plain multi-line paste as a candidate block.
 
-Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, indented detail-list lines, code keywords, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs and paragraph-plus-detail-list notes from being labeled as languages while still allowing compact code samples through to the model.
+Some pastes are left to Obsidian on purpose: formatted text copied from a web page (so Obsidian can convert it to Markdown), pastes while the cursor is already inside a code block, and pastes whose code fences all have a language already.
+
+Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, indented detail-list lines, code keywords, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs, long-form notes, and paragraph-plus-detail-list notes from being labeled as languages while still allowing compact code samples through to the model.
 
 If the prose filter allows the block, the bundled Guesslang model scores possible languages. The plugin then takes the highest-scoring language that is not disabled in settings and only applies it when the score is at or above your configured confidence threshold.
 
@@ -29,7 +31,7 @@ You can install this plugin manually:
    ```text
    <Vault>/.obsidian/plugins/auto-codeblock-language-detector/
    ```
-2. Copy `main.js` and `manifest.json` into the newly created directory.
+2. Copy `main.js`, `manifest.json` and `styles.css` into the newly created directory.
 3. Reload Obsidian and enable **Auto Codeblock Language Detector** in **Settings -> Community plugins**.
 
 ## Configuration
@@ -52,6 +54,12 @@ Build a production bundle with:
 
 ```bash
 npm run build
+```
+
+Run the tests (needs Node 23.6 or newer) with:
+
+```bash
+npm test
 ```
 
 ## Credits

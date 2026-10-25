@@ -11,8 +11,84 @@ export interface CodeFenceProcessingResult {
   updatedCount: number;
 }
 
+interface FenceLine {
+  indent: string;
+  token: string;
+  info: string;
+}
+
+/**
+ * Parses a fence line, or returns null. Any indentation is allowed so fences nested in
+ * list items count; a backtick fence whose info string has a backtick is inline code.
+ */
+function matchFence(line: string): FenceLine | null {
+  const match = line.match(/^([ \t]*)(`{3,}|~{3,})(.*)$/);
+  if (!match || (match[2][0] === "`" && match[3].includes("`"))) {
+    return null;
+  }
+
+  return { indent: match[1], token: match[2], info: match[3].trim() };
+}
+
+function closesFence(line: FenceLine | null, openToken: string): boolean {
+  return line !== null && line.info === "" && line.token[0] === openToken[0] && line.token.length >= openToken.length;
+}
+
+export function hasCodeFence(markdown: string): boolean {
+  return markdown.split("\n").some((line) => matchFence(line) !== null);
+}
+
 export function containsUnlabeledCodeFence(markdown: string): boolean {
   return parseUnlabeledCodeFences(markdown).length > 0;
+}
+
+/** True when the end of `markdown` (e.g. the text before the cursor) sits inside an open fenced block. */
+export function isInsideCodeFence(markdown: string): boolean {
+  let openToken: string | null = null;
+
+  for (const line of markdown.split("\n")) {
+    const fence = matchFence(line);
+    if (openToken === null) {
+      openToken = fence?.token ?? null;
+    } else if (closesFence(fence, openToken)) {
+      openToken = null;
+    }
+  }
+
+  return openToken !== null;
+}
+
+/** Whether the plugin should take over a paste instead of letting Obsidian paste it normally. */
+export function shouldHandlePaste(text: string, html: string, textBeforeCursor: string): boolean {
+  if (text.trim().split("\n").length < 2) {
+    return false;
+  }
+
+  // Leave rich text to Obsidian's HTML-to-Markdown conversion.
+  // shortcut: guesses "code" from <pre>/<code>/white-space:pre markup, widen if some code source is missed.
+  if (html && !/<pre|<code|white-space:\s*pre/i.test(html)) {
+    return false;
+  }
+
+  // Fencing a paste inside an existing code block would close that block early.
+  if (isInsideCodeFence(textBeforeCursor)) {
+    return false;
+  }
+
+  // Fences that are all labeled already: nothing to add, paste as is.
+  return !hasCodeFence(text) || containsUnlabeledCodeFence(text);
+}
+
+/**
+ * Adds line breaks so a fence at the start or end of `text` gets its own line when it is
+ * pasted between `textBefore` and `textAfter` (the rest of the cursor's line).
+ * Otherwise the fence is not a fence, and the rest of the note turns into code.
+ */
+export function padFences(text: string, textBefore: string, textAfter: string): string {
+  const lines = text.split("\n");
+  const before = hasCodeFence(lines[0]) && textBefore.trim() ? "\n" : "";
+  const after = hasCodeFence(lines[lines.length - 1]) && textAfter.trim() ? "\n" : "";
+  return `${before}${text}${after}`;
 }
 
 export async function annotateMarkdownCodeFences(
@@ -20,21 +96,15 @@ export async function annotateMarkdownCodeFences(
   detector: CodeLanguageDetector
 ): Promise<CodeFenceProcessingResult> {
   const lines = markdown.split("\n");
-  const codeFenceBlocks = parseUnlabeledCodeFences(markdown);
-
-  if (codeFenceBlocks.length === 0) {
-    return { markdown, updatedCount: 0 };
-  }
-
   let updatedCount = 0;
 
-  for (const block of codeFenceBlocks) {
-    const detection = await detector.detect(block.code);
-    if (!detection) {
+  for (const block of parseUnlabeledCodeFences(markdown)) {
+    const language = await detector.detect(block.code);
+    if (!language) {
       continue;
     }
 
-    lines[block.startLine] = `${block.fenceToken}${detection.fenceLanguage}`;
+    lines[block.startLine] = `${block.fenceToken}${language}`;
     updatedCount += 1;
   }
 
@@ -49,60 +119,31 @@ export function parseUnlabeledCodeFences(markdown: string): CodeFenceBlock[] {
   const blocks: CodeFenceBlock[] = [];
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const openingMatch = lines[lineIndex].match(/^([ \t]{0,3})(`{3,}|~{3,})([^\n]*)$/);
-    if (!openingMatch) {
+    const opening = matchFence(lines[lineIndex]);
+    if (!opening) {
       continue;
     }
 
-    const fenceToken = openingMatch[2];
-    const infoString = openingMatch[3].trim();
-    if (infoString.length > 0) {
-      // Skip the ENTIRE labeled block so its closing ``` isn't mistaken for
-      // the opening of a new unlabeled block.
-      const closingPattern = new RegExp(
-        `^[ \\t]{0,3}${escapeRegExp(fenceToken.charAt(0))}{${fenceToken.length},}[ \\t]*$`
-      );
-      for (let skip = lineIndex + 1; skip < lines.length; skip++) {
-        if (closingPattern.test(lines[skip])) {
-          lineIndex = skip;
-          break;
-        }
-      }
+    let closingLineIndex = lineIndex + 1;
+    while (closingLineIndex < lines.length && !closesFence(matchFence(lines[closingLineIndex]), opening.token)) {
+      closingLineIndex += 1;
+    }
+
+    if (closingLineIndex === lines.length) {
       continue;
     }
 
-    const closingFencePattern = new RegExp(
-      `^[ \\t]{0,3}${escapeRegExp(fenceToken.charAt(0))}{${fenceToken.length},}[ \\t]*$`
-    );
-
-    const contentLines: string[] = [];
-    let closingLineIndex = -1;
-
-    for (let contentIndex = lineIndex + 1; contentIndex < lines.length; contentIndex += 1) {
-      if (closingFencePattern.test(lines[contentIndex])) {
-        closingLineIndex = contentIndex;
-        break;
-      }
-
-      contentLines.push(lines[contentIndex]);
+    // Labeled blocks are skipped whole, so their closing fence is not read as a new opener.
+    if (opening.info === "") {
+      blocks.push({
+        code: lines.slice(lineIndex + 1, closingLineIndex).join("\n"),
+        fenceToken: `${opening.indent}${opening.token}`,
+        startLine: lineIndex
+      });
     }
-
-    if (closingLineIndex === -1) {
-      continue;
-    }
-
-    blocks.push({
-      code: contentLines.join("\n"),
-      fenceToken: `${openingMatch[1]}${fenceToken}`,
-      startLine: lineIndex
-    });
 
     lineIndex = closingLineIndex;
   }
 
   return blocks;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -14,8 +14,6 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Auto Codeblock Language Detector" });
-
     // ── Confidence threshold ──────────────────────────────────────────────
     new Setting(containerEl)
       .setName("Confidence threshold")
@@ -24,7 +22,7 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
         "Lower values detect more blocks but may be less accurate."
       )
       .addSlider((slider) => {
-        const valueDisplay = createSpan({ text: String(this.plugin.settings.confidenceThreshold) });
+        const valueDisplay = createSpan({ text: this.plugin.settings.confidenceThreshold.toFixed(2) });
         slider
           .setLimits(0.05, 0.95, 0.05)
           .setValue(this.plugin.settings.confidenceThreshold)
@@ -40,7 +38,7 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
       });
 
     // ── Language lists ────────────────────────────────────────────────────
-    containerEl.createEl("h3", { text: "Language detection" });
+    new Setting(containerEl).setName("Language detection").setHeading();
     containerEl.createEl("p", {
       text: "Click a language chip to move it between lists. " +
             "Languages in the Disabled list will never be emitted.",
@@ -75,9 +73,6 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
           })
       );
 
-    // ── Inject styles once ────────────────────────────────────────────────
-    this.injectStyles();
-
     // ── Render chips ──────────────────────────────────────────────────────
     this.renderChips(enabledContainer, disabledContainer);
   }
@@ -103,7 +98,8 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
             this.plugin.settings.disabledLanguageIds.filter((id) => id !== lang.id);
         } else {
           // Move to disabled
-          this.plugin.settings.disabledLanguageIds.push(lang.id);
+          // New array, not push: the list may still be DEFAULT_SETTINGS' own array.
+          this.plugin.settings.disabledLanguageIds = [...this.plugin.settings.disabledLanguageIds, lang.id];
         }
         await this.plugin.saveSettings();
         this.display();
@@ -138,86 +134,5 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
       attr: { title: `ID: ${lang.id} — click to ${disabled ? "enable" : "disable"}` },
     });
     return chip;
-  }
-
-  private injectStyles(): void {
-    const styleId = "acld-settings-styles";
-    if (document.getElementById(styleId)) return;
-
-    const style = document.createElement("style");
-    style.id = styleId;
-    style.textContent = `
-      .acld-lists-wrapper {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-      .acld-list-section {
-        border: 1px solid var(--background-modifier-border);
-        border-radius: 8px;
-        padding: 12px 16px 16px;
-        background: var(--background-secondary);
-      }
-      .acld-list-section--disabled {
-        background: var(--background-secondary-alt);
-        opacity: 0.9;
-      }
-      .acld-list-section h4 {
-        margin: 0 0 10px 0;
-        font-size: 0.85em;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-muted);
-      }
-      .acld-chip-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        min-height: 36px;
-      }
-      .acld-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.82em;
-        font-weight: 500;
-        cursor: pointer;
-        border: none;
-        transition: transform 0.1s ease, opacity 0.15s ease, box-shadow 0.15s ease;
-        user-select: none;
-      }
-      .acld-chip:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      }
-      .acld-chip:active {
-        transform: translateY(0);
-      }
-      .acld-chip--enabled {
-        background: var(--interactive-accent);
-        color: var(--text-on-accent);
-      }
-      .acld-chip--disabled {
-        background: var(--background-modifier-error);
-        color: var(--text-on-accent);
-        opacity: 0.75;
-      }
-      .acld-chip-placeholder {
-        font-size: 0.85em;
-        color: var(--text-faint);
-        font-style: italic;
-        align-self: center;
-      }
-      .acld-slider-value {
-        min-width: 36px;
-        text-align: right;
-        color: var(--text-muted);
-        font-size: 0.85em;
-        margin-left: 8px;
-      }
-    `;
-    document.head.appendChild(style);
   }
 }

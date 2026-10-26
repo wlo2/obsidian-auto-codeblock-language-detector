@@ -62,6 +62,12 @@ Run the tests (needs Node 23.6 or newer) with:
 npm test
 ```
 
+Check the code with Obsidian's recommended ESLint rules (the same rules its automated plugin review runs):
+
+```bash
+npm run lint
+```
+
 ## License
 
 Copyright (C) 2026 wlo2

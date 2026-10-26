@@ -1,26 +1,13 @@
 import { LANGUAGE_ALIASES } from "../languageAliases";
 import type { PluginSettings } from "../settings";
+import type { GuessLang } from "../vendor/guesslang.cjs";
 import { looksLikeNaturalLanguage } from "./proseFilter";
-
-interface ModelResult {
-  confidence: number;
-  languageId: string;
-}
-
-interface GuessLangInstance {
-  runModel(content: string): Promise<ModelResult[]>;
-  dispose(): void;
-}
-
-interface GuessLangConstructor {
-  new (): GuessLangInstance;
-}
 
 // Same as GuessLang's own minimum; shorter input returns no results.
 const MIN_CONTENT_SIZE = 20;
 
 export class CodeLanguageDetector {
-  private detectorPromise?: Promise<GuessLangInstance>;
+  private detectorPromise?: Promise<GuessLang>;
 
   /** Reads settings on every call, so changes apply without a sync step. */
   constructor(private readonly getSettings: () => PluginSettings) {}
@@ -65,11 +52,11 @@ export class CodeLanguageDetector {
     return LANGUAGE_ALIASES[bestMatch.languageId] ?? bestMatch.languageId;
   }
 
-  private getDetector(): Promise<GuessLangInstance> {
+  private getDetector(): Promise<GuessLang> {
     // GuessLang loads its model on the first runModel call, so warm it up here, once.
     this.detectorPromise ??= (async () => {
-      // Required here, not at the top: running the 1.7 MB library would slow down plugin load.
-      const { GuessLang } = require("../vendor/guesslang.cjs") as { GuessLang: GuessLangConstructor };
+      // Imported here, not at the top: running the 1.7 MB library would slow down plugin load.
+      const { GuessLang } = await import("../vendor/guesslang.cjs");
       const guessLang = new GuessLang();
       await guessLang.runModel("x".repeat(MIN_CONTENT_SIZE));
       return guessLang;

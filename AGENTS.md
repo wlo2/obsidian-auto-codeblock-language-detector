@@ -174,7 +174,8 @@ getSettingDefinitions(): SettingDefinitionItem[] {
       search: { placeholder: "Filter languages", match: (d, q) => d.name.toLowerCase().includes(q.toLowerCase()) },
       items: LANGUAGES.map((l) => ({ name: l.label, control: { type: "toggle", key: `language:${l.id}` } })),
     },
-    { name: "Reset to defaults", action: async () => { /* reset */ await this.plugin.saveSettings(); this.update(); } },
+    // action expects a void function: start async work with `void`.
+    { name: "Reset to defaults", action: () => void this.resetToDefaults() },
   ];
 }
 ```
@@ -188,9 +189,23 @@ getSettingDefinitions(): SettingDefinitionItem[] {
 5. Use `render` only for what controls can't do.
 6. Delete `display()` and the imports it no longer needs.
 
-## 11. Before every release
+## 11. Linting
 
-- [ ] Type check, tests and production build pass. `main.js` is minified.
+Obsidian's automated review runs [eslint-plugin-obsidianmd](https://github.com/obsidianmd/eslint-plugin) on every submitted plugin. Run the same rules locally:
+
+- Install `eslint` and `eslint-plugin-obsidianmd` as dev dependencies. The plugin brings its own `typescript-eslint` and `@eslint/js`.
+- In `eslint.config.mjs`, spread `obsidianmd.configs.recommended` and set `languageOptions.parserOptions.projectService: true` (its rules need type information).
+- Lint the same files as the scanner, which only checks plugin source. It skips build output, `*.cjs`/`*.mjs`/`*.mts` files, build scripts such as `esbuild.config.mjs`, and test folders. Vendored code belongs in a `.cjs` file with a `.d.cts` type file next to it.
+- Add `"lint": "eslint ."` to `package.json` and keep it free of errors and warnings. Fix the code rather than disabling rules. The scanner sees disable comments.
+- Typical fixes:
+  - Type the result of `loadData()` instead of passing `any` around.
+  - Use `import()` instead of `require()`.
+  - Keep async functions out of callbacks that expect `void`: call `void this.doWork()` instead.
+  - Ask questions with a `Modal`, never `window.confirm()` or `alert()`.
+
+## 12. Before every release
+
+- [ ] Type check, lint, tests and production build pass. `main.js` is minified.
 - [ ] `manifest.json` `version` is bumped, `versions.json` has the new entry, and the Git tag equals the version.
 - [ ] The release has `main.js` and `manifest.json` attached, plus `styles.css` if it exists.
 - [ ] `LICENSE` exists. The README states the license, credits bundled code, and covers every disclosure from section 6.

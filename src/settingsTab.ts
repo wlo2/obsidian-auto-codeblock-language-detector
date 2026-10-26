@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, SettingDefinitionItem } from "obsidian";
+import { App, Modal, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import type AutoCodeblockLanguageDetectorPlugin from "./main";
 import { ALL_LANGUAGES, DEFAULT_SETTINGS } from "./settings";
 
@@ -49,19 +49,21 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
       {
         name: "Reset to defaults",
         desc: "Restore the default language list and confidence threshold.",
-        action: async () => {
-          // The whole row is clickable, so ask before throwing away the user's choices.
-          if (!window.confirm("Reset the confidence threshold and language list to their defaults?")) {
-            return;
-          }
-
-          this.plugin.settings.disabledLanguageIds = [...DEFAULT_SETTINGS.disabledLanguageIds];
-          this.plugin.settings.confidenceThreshold = DEFAULT_SETTINGS.confidenceThreshold;
-          await this.plugin.saveSettings();
-          this.update();
+        // The whole row is clickable, so ask before throwing away the user's choices.
+        action: () => {
+          new ConfirmModal(this.app, "Reset the confidence threshold and language list to their defaults?", () => {
+            void this.resetToDefaults();
+          }).open();
         },
       },
     ];
+  }
+
+  private async resetToDefaults(): Promise<void> {
+    this.plugin.settings.disabledLanguageIds = [...DEFAULT_SETTINGS.disabledLanguageIds];
+    this.plugin.settings.confidenceThreshold = DEFAULT_SETTINGS.confidenceThreshold;
+    await this.plugin.saveSettings();
+    this.update();
   }
 
   getControlValue(key: string): unknown {
@@ -82,5 +84,24 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
     // A new array, never a mutation: the list may still be DEFAULT_SETTINGS' own array.
     this.plugin.settings.disabledLanguageIds = value ? others : [...others, id];
     await this.plugin.saveSettings();
+  }
+}
+
+/** Obsidian's own dialog for a yes/no question, instead of the browser's blocking confirm(). */
+class ConfirmModal extends Modal {
+  constructor(app: App, private readonly message: string, private readonly onConfirm: () => void) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.setContent(this.message);
+    new Setting(this.contentEl)
+      .addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
+      .addButton((button) =>
+        button.setButtonText("Reset").setDestructive().setCta().onClick(() => {
+          this.close();
+          this.onConfirm();
+        })
+      );
   }
 }

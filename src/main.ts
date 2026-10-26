@@ -61,7 +61,8 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const saved = (await this.loadData()) as Partial<PluginSettings> | null;
+    this.settings = { ...DEFAULT_SETTINGS, ...saved };
   }
 
   async saveSettings(): Promise<void> {

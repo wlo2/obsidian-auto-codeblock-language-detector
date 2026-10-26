@@ -17,7 +17,7 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
 
     this.addCommand({
       id: "detect-language",
-      name: "/detect_language",
+      name: "Detect languages in current note",
       editorCallback: (editor) => {
         this.detectLanguagesInEditor(editor).catch((error) => {
           console.error("[AutoCodeblock] language detection failed", error);

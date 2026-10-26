@@ -16,10 +16,6 @@ interface GuessLangConstructor {
   new (): GuessLangInstance;
 }
 
-const { GuessLang } = require("../vendor/guesslang.cjs") as {
-  GuessLang: GuessLangConstructor;
-};
-
 // Same as GuessLang's own minimum; shorter input returns no results.
 const MIN_CONTENT_SIZE = 20;
 
@@ -72,6 +68,8 @@ export class CodeLanguageDetector {
   private getDetector(): Promise<GuessLangInstance> {
     // GuessLang loads its model on the first runModel call, so warm it up here, once.
     this.detectorPromise ??= (async () => {
+      // Required here, not at the top: running the 1.7 MB library would slow down plugin load.
+      const { GuessLang } = require("../vendor/guesslang.cjs") as { GuessLang: GuessLangConstructor };
       const guessLang = new GuessLang();
       await guessLang.runModel("x".repeat(MIN_CONTENT_SIZE));
       return guessLang;

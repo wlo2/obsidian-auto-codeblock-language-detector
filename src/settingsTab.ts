@@ -1,6 +1,10 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import type AutoCodeblockLanguageDetectorPlugin from "./main";
-import { ALL_LANGUAGES, DEFAULT_SETTINGS, LanguageDefinition } from "./settings";
+import { ALL_LANGUAGES, DEFAULT_SETTINGS } from "./settings";
+
+// Each language toggle uses the key "language:<id>". It is stored inverted, in
+// disabledLanguageIds, so settings saved by older versions keep working.
+const LANGUAGE_KEY_PREFIX = "language:";
 
 export class AutoCodeblockSettingTab extends PluginSettingTab {
   plugin: AutoCodeblockLanguageDetectorPlugin;
@@ -10,129 +14,73 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    const languages = [...ALL_LANGUAGES].sort((a, b) => a.label.localeCompare(b.label));
 
-    // ── Confidence threshold ──────────────────────────────────────────────
-    new Setting(containerEl)
-      .setName("Confidence threshold")
-      .setDesc(
-        "Minimum confidence score (0–1) required to label a code block. " +
-        "Lower values detect more blocks but may be less accurate."
-      )
-      .addSlider((slider) => {
-        const valueDisplay = createSpan({ text: this.plugin.settings.confidenceThreshold.toFixed(2) });
-        slider
-          .setLimits(0.05, 0.95, 0.05)
-          .setValue(this.plugin.settings.confidenceThreshold)
-          .onChange(async (value) => {
-            valueDisplay.setText(value.toFixed(2));
-            this.plugin.settings.confidenceThreshold = value;
-            await this.plugin.saveSettings();
-          });
-        // Append numeric label after the slider
-        slider.sliderEl.parentElement?.appendChild(valueDisplay);
-        valueDisplay.addClass("acld-slider-value");
-        return slider;
-      });
+    return [
+      {
+        name: "Confidence threshold",
+        desc: "Minimum confidence score (0–1) required to label a code block. " +
+          "Lower values detect more blocks but may be less accurate.",
+        control: {
+          type: "slider",
+          key: "confidenceThreshold",
+          min: 0.05,
+          max: 0.95,
+          step: 0.05,
+          displayFormat: (value) => value.toFixed(2),
+        },
+      },
+      {
+        type: "group",
+        heading: "Languages",
+        search: {
+          placeholder: "Filter languages",
+          // Aliases hold the short codes ("ts", "js"), as in Obsidian's main settings search.
+          match: (definition, query) =>
+            [definition.name, ...(definition.aliases ?? [])].some((text) => text.toLowerCase().includes(query.toLowerCase())),
+        },
+        items: languages.map((language) => ({
+          name: language.label,
+          aliases: [language.id],
+          control: { type: "toggle", key: `${LANGUAGE_KEY_PREFIX}${language.id}` },
+        })),
+      },
+      {
+        name: "Reset to defaults",
+        desc: "Restore the default language list and confidence threshold.",
+        action: async () => {
+          // The whole row is clickable, so ask before throwing away the user's choices.
+          if (!window.confirm("Reset the confidence threshold and language list to their defaults?")) {
+            return;
+          }
 
-    // ── Language lists ────────────────────────────────────────────────────
-    new Setting(containerEl).setName("Language detection").setHeading();
-    containerEl.createEl("p", {
-      text: "Click a language chip to move it between lists. " +
-            "Languages in the Disabled list will never be emitted.",
-      cls: "setting-item-description",
-    });
-
-    const listsWrapper = containerEl.createDiv({ cls: "acld-lists-wrapper" });
-
-    // -- Enabled list
-    const enabledSection = listsWrapper.createDiv({ cls: "acld-list-section" });
-    enabledSection.createEl("h4", { text: "✅ Enabled languages" });
-    const enabledContainer = enabledSection.createDiv({ cls: "acld-chip-container" });
-
-    // -- Disabled list
-    const disabledSection = listsWrapper.createDiv({ cls: "acld-list-section acld-list-section--disabled" });
-    disabledSection.createEl("h4", { text: "🚫 Disabled languages" });
-    const disabledContainer = disabledSection.createDiv({ cls: "acld-chip-container" });
-
-    // ── Reset button ──────────────────────────────────────────────────────
-    new Setting(containerEl)
-      .setName("Reset to defaults")
-      .setDesc("Restore the default language list and confidence threshold.")
-      .addButton((btn) =>
-        btn
-          .setButtonText("Reset")
-          .setWarning()
-          .onClick(async () => {
-            this.plugin.settings.disabledLanguageIds = [...DEFAULT_SETTINGS.disabledLanguageIds];
-            this.plugin.settings.confidenceThreshold = DEFAULT_SETTINGS.confidenceThreshold;
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
-
-    // ── Render chips ──────────────────────────────────────────────────────
-    this.renderChips(enabledContainer, disabledContainer);
+          this.plugin.settings.disabledLanguageIds = [...DEFAULT_SETTINGS.disabledLanguageIds];
+          this.plugin.settings.confidenceThreshold = DEFAULT_SETTINGS.confidenceThreshold;
+          await this.plugin.saveSettings();
+          this.update();
+        },
+      },
+    ];
   }
 
-  private renderChips(
-    enabledContainer: HTMLElement,
-    disabledContainer: HTMLElement
-  ): void {
-    const disabledSet = new Set(this.plugin.settings.disabledLanguageIds);
-
-    const sorted = [...ALL_LANGUAGES].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-
-    for (const lang of sorted) {
-      const isDisabled = disabledSet.has(lang.id);
-      const chip = this.createChip(lang, isDisabled);
-
-      chip.addEventListener("click", async () => {
-        if (disabledSet.has(lang.id)) {
-          // Move to enabled
-          this.plugin.settings.disabledLanguageIds =
-            this.plugin.settings.disabledLanguageIds.filter((id) => id !== lang.id);
-        } else {
-          // Move to disabled
-          // New array, not push: the list may still be DEFAULT_SETTINGS' own array.
-          this.plugin.settings.disabledLanguageIds = [...this.plugin.settings.disabledLanguageIds, lang.id];
-        }
-        await this.plugin.saveSettings();
-        this.display();
-      });
-
-      if (isDisabled) {
-        disabledContainer.appendChild(chip);
-      } else {
-        enabledContainer.appendChild(chip);
-      }
+  getControlValue(key: string): unknown {
+    if (key.startsWith(LANGUAGE_KEY_PREFIX)) {
+      return !this.plugin.settings.disabledLanguageIds.includes(key.slice(LANGUAGE_KEY_PREFIX.length));
     }
 
-    // Show placeholder when a list is empty
-    if (enabledContainer.children.length === 0) {
-      enabledContainer.createEl("span", {
-        text: "No enabled languages — click a disabled chip to re-enable.",
-        cls: "acld-chip-placeholder",
-      });
-    }
-    if (disabledContainer.children.length === 0) {
-      disabledContainer.createEl("span", {
-        text: "No disabled languages — click an enabled chip to disable it.",
-        cls: "acld-chip-placeholder",
-      });
-    }
+    return super.getControlValue(key);
   }
 
-  private createChip(lang: LanguageDefinition, disabled: boolean): HTMLElement {
-    const chip = createEl("button", {
-      text: lang.label,
-      cls: ["acld-chip", disabled ? "acld-chip--disabled" : "acld-chip--enabled"],
-      attr: { title: `ID: ${lang.id} — click to ${disabled ? "enable" : "disable"}` },
-    });
-    return chip;
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (!key.startsWith(LANGUAGE_KEY_PREFIX)) {
+      return super.setControlValue(key, value);
+    }
+
+    const id = key.slice(LANGUAGE_KEY_PREFIX.length);
+    const others = this.plugin.settings.disabledLanguageIds.filter((disabledId) => disabledId !== id);
+    // A new array, never a mutation: the list may still be DEFAULT_SETTINGS' own array.
+    this.plugin.settings.disabledLanguageIds = value ? others : [...others, id];
+    await this.plugin.saveSettings();
   }
 }

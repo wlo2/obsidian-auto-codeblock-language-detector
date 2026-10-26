@@ -11,6 +11,7 @@ const buildOptions = {
   target: "es2020",
   logLevel: "info",
   sourcemap: isProduction ? false : "inline",
+  minify: isProduction,
   treeShaking: true,
   outfile: "main.js"
 };

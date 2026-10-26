@@ -8,14 +8,14 @@ It runs entirely offline and intelligently filters languages to provide highly a
 
 - **Smart Paste Handling:** Automatically detects the language of plain multi-line code pastes and wraps them in a labeled code block.
 - **Fence Annotation:** If you paste code that already has unlabeled fences (e.g., ` ``` `), it instantly adds the correct language tag (e.g., ` ```python `).
-- **Manual Detection Command:** Run `/detect_language` to scan the current note and add language labels to any existing unlabeled fenced code blocks.
+- **Manual Detection Command:** Run **Detect languages in current note** from the command palette to scan the current note and add language labels to any existing unlabeled fenced code blocks.
 - **Customizable:** Use the plugin settings to tweak the minimum confidence threshold, or completely disable languages you don't use (e.g., disable `Batch` to prioritize `Bash` on Mac/Linux).
 - **Prose Rejection:** A pre-detection filter skips text that statistically looks like natural language instead of code, reducing false positives on pasted notes and paragraphs.
 - **Fast and Offline:** Uses a bundled, optimized machine learning model — no API keys required, and your code never leaves your device.
 
 ## How detection works
 
-When you paste text or run `/detect_language`, the plugin first finds unlabeled code fences or treats a plain multi-line paste as a candidate block.
+When you paste text or run the **Detect languages in current note** command, the plugin first finds unlabeled code fences or treats a plain multi-line paste as a candidate block.
 
 Some pastes are left to Obsidian on purpose: formatted text copied from a web page (so Obsidian can convert it to Markdown), pastes while the cursor is already inside a code block, and pastes whose code fences all have a language already.
 
@@ -31,15 +31,15 @@ You can install this plugin manually:
    ```text
    <Vault>/.obsidian/plugins/auto-codeblock-language-detector/
    ```
-2. Copy `main.js`, `manifest.json` and `styles.css` into the newly created directory.
-3. Reload Obsidian and enable **Auto Codeblock Language Detector** in **Settings -> Community plugins**.
+2. Copy `main.js` and `manifest.json` into the newly created directory.
+3. Reload Obsidian (version 1.13.1 or newer) and enable **Auto Codeblock Language Detector** in **Settings -> Community plugins**.
 
 ## Configuration
 
 In the plugin settings, you can configure:
 
 - **Confidence threshold:** Minimum confidence score (0.05 to 0.95) required to label a code block. Lower values detect more blocks but may be less accurate on very short snippets.
-- **Enabled / Disabled Languages:** Click the language chips to move them between the enabled and disabled lists. Languages in the disabled list will never be emitted by the detector. 
+- **Languages:** Turn off the toggle for any language you never want the detector to emit. Type in the filter box, or use Obsidian's settings search, to find a language quickly.
 
 ## Development
 
@@ -62,5 +62,16 @@ Run the tests (needs Node 23.6 or newer) with:
 npm test
 ```
 
+## License
+
+Copyright (C) 2026 wlo2
+
+This plugin is free software, released under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-only). You may use, share and change it. If you distribute it or a work based on it, you must release that work's source code under the same license.
+
+Versions up to 0.4.0 were published under the MIT License. Bundled third-party code keeps its own license; see Credits.
+
 ## Credits
-Uses the open-source [Guesslang](https://github.com/yoeo/guesslang) model via [TensorFlow.js](https://www.tensorflow.org/js/).
+
+Language detection uses the open-source [Guesslang](https://github.com/yoeo/guesslang) model (MIT License) via [TensorFlow.js](https://www.tensorflow.org/js/) (Apache License 2.0).
+
+The bundled `src/vendor/guesslang.cjs` is `dist/lib/guesslang.min.js` from [`@microsoft/guesslang-js` 0.0.4](https://www.npmjs.com/package/@microsoft/guesslang-js) ([source](https://github.com/hieplpvip/guesslang-js), MIT License). That build contains TensorFlow.js 3.9.0 and the Guesslang model. It has three small local changes so it can be bundled into the plugin: it is exported with `module.exports`, its entry function returns the exports, and it loads Node's `util` module instead of an empty placeholder, which the desktop app needs. The full MIT and Apache 2.0 license texts are kept at the top of that file and in the released `main.js`.

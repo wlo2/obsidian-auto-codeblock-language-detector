@@ -8,6 +8,8 @@ const buildOptions = {
   bundle: true,
   external: ["obsidian", "electron", ...builtinModules],
   format: "cjs",
+  // Inlines the model weights, so the plugin needs no network or extra files.
+  loader: { ".bin": "binary" },
   target: "es2020",
   logLevel: "info",
   sourcemap: isProduction ? false : "inline",

@@ -1,3 +1,31 @@
+// Magika labels that differ from the setting ids, which keep guesslang's ids so saved settings still work.
+export const MAGIKA_LABELS: Record<string, string> = {
+  batch: "bat",
+  clojure: "clj",
+  cobol: "cbl",
+  coffeescript: "coffee",
+  elixir: "ex",
+  erlang: "erl",
+  fortran: "f90",
+  haskell: "hs",
+  javascript: "js",
+  julia: "jl",
+  kotlin: "kt",
+  latex: "tex",
+  markdown: "md",
+  objectivec: "mm",
+  ocaml: "ml",
+  pascal: "pas",
+  perl: "pm",
+  powershell: "ps1",
+  python: "py",
+  ruby: "rb",
+  rust: "rs",
+  shell: "sh",
+  typescript: "ts",
+  verilog: "v"
+};
+
 export const LANGUAGE_ALIASES: Record<string, string> = {
   asm: "nasm",
   bat: "batch",

@@ -1,16 +1,16 @@
 export interface PluginSettings {
   /** Minimum confidence score [0–1] to accept a detection. */
   confidenceThreshold: number;
-  /** Language IDs (guesslang) that are blacklisted and will never be emitted. */
+  /** Language IDs (guesslang's, kept for saved settings) that will never be emitted. */
   disabledLanguageIds: string[];
 }
 
 export interface LanguageDefinition {
-  id: string;       // guesslang internal ID
+  id: string;       // guesslang's ID, kept for saved settings; see MAGIKA_LABELS
   label: string;    // human-readable name shown in the UI
 }
 
-/** All 54 languages the guesslang model can detect, with display names. */
+/** The 54 programming languages that can be detected, with display names. */
 export const ALL_LANGUAGES: LanguageDefinition[] = [
   { id: "asm",        label: "Assembly" },
   { id: "bat",        label: "Batch (Windows)" },

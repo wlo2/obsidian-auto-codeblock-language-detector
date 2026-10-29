@@ -1,6 +1,6 @@
 # Auto Codeblock Language Detector
 
-An Obsidian community plugin that automatically detects and adds the programming language to your pasted code blocks, powered by a bundled **TensorFlow.js Guesslang model**. 
+An Obsidian community plugin that automatically detects and adds the programming language to your pasted code blocks, powered by Google's **Magika** model, bundled and run with TensorFlow.js.
 
 It runs entirely offline and intelligently filters languages to provide highly accurate detection for over 50 programming languages.
 
@@ -19,9 +19,11 @@ When you paste text or run the **Detect languages in current note** command, the
 
 Some pastes are left to Obsidian on purpose: formatted text copied from a web page or a document (so Obsidian can convert it to Markdown), pastes while the cursor is already inside a code block, and pastes whose code fences all have a language already. Code copied from an editor such as VS Code or a JetBrains IDE, or from a code block on a web page, is still labeled. Code pasted into a list item stays inside that item.
 
-Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, indented detail-list lines, code keywords, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs, long-form notes, and paragraph-plus-detail-list notes from being labeled as languages while still allowing compact code samples through to the model.
+Before the Magika model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, indented detail-list lines, code keywords, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs, long-form notes, and paragraph-plus-detail-list notes from being labeled as languages while still allowing compact code samples through to the model.
 
-If the prose filter allows the block, the bundled Guesslang model scores possible languages. The plugin then takes the highest-scoring language that is not disabled in settings and only applies it when the score is at or above your configured confidence threshold.
+If the prose filter allows the block, the bundled Magika model scores it. Magika also recognizes plain text and many other file types, which stay unlabeled. The plugin applies the top language only when Magika is confident enough for that language, the score is at or above your configured confidence threshold, and the language is not disabled in settings.
+
+The model runs on the GPU through WebGL. The very first detection after installing compiles it for the GPU, which can pause Obsidian for a few seconds; later starts use the cached result.
 
 ## Installation
 
@@ -78,6 +80,8 @@ Versions up to 0.4.0 were published under the MIT License. Bundled third-party c
 
 ## Credits
 
-Language detection uses the open-source [Guesslang](https://github.com/yoeo/guesslang) model (MIT License) via [TensorFlow.js](https://www.tensorflow.org/js/) (Apache License 2.0).
+Language detection uses Google's [Magika](https://github.com/google/magika) model (Apache License 2.0) via [TensorFlow.js](https://www.tensorflow.org/js/) 4.22.0 (Apache License 2.0).
 
-The bundled `src/vendor/guesslang.cjs` is `dist/lib/guesslang.min.js` from [`@microsoft/guesslang-js` 0.0.4](https://www.npmjs.com/package/@microsoft/guesslang-js) ([source](https://github.com/hieplpvip/guesslang-js), MIT License). That build contains TensorFlow.js 3.9.0 and the Guesslang model. It has three small local changes so it can be bundled into the plugin: it is exported with `module.exports`, its entry function returns the exports, and it loads Node's `util` module instead of an empty placeholder, which the desktop app needs. The full MIT and Apache 2.0 license texts are kept at the top of that file and in the released `main.js`.
+The files in `src/vendor/magika/` are the `standard_v3_3` model from the Magika repository (`website-ng/public/models/standard_v3_3`), unchanged. `src/services/magikaModel.ts` reimplements Magika's input preparation and confidence thresholds from its JavaScript package, so the plugin can load the model from memory. The full Apache 2.0 license text is kept in `src/vendor/magika/license.ts` and in the released `main.js`.
+
+Versions up to 0.5.5 used the [Guesslang](https://github.com/yoeo/guesslang) model (MIT License) from [`@microsoft/guesslang-js`](https://github.com/hieplpvip/guesslang-js).

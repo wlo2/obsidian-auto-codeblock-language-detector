@@ -82,3 +82,17 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     "tex", "toml", "v", "vba"
   ],
 };
+
+/** A language's toggle is on when the language is not in the disabled list. */
+export function isLanguageEnabled(disabledLanguageIds: readonly string[], id: string): boolean {
+  return !disabledLanguageIds.includes(id);
+}
+
+/**
+ * Returns a new disabled list with `id` turned on or off. It never changes the given array,
+ * which may still be DEFAULT_SETTINGS' own list.
+ */
+export function setLanguageEnabled(disabledLanguageIds: readonly string[], id: string, enabled: boolean): string[] {
+  const others = disabledLanguageIds.filter((disabledId) => disabledId !== id);
+  return enabled ? others : [...others, id];
+}

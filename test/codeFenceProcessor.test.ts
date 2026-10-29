@@ -23,9 +23,18 @@ test("shouldHandlePaste", () => {
   const code = "x = 1\ny = 2";
   assert.equal(shouldHandlePaste(code, "", ""), true);
   assert.equal(shouldHandlePaste("one line", "", ""), false);
-  // Rich text goes to Obsidian's HTML conversion; HTML that marks code does not.
+  // Rich text goes to Obsidian's HTML conversion; HTML that is only code does not.
   assert.equal(shouldHandlePaste(code, "<p>x = 1</p><p>y = 2</p>", ""), false);
   assert.equal(shouldHandlePaste(code, "<pre>x = 1\ny = 2</pre>", ""), true);
+  // Code block on a web page (Chrome adds <meta>), and a JetBrains IDE selection.
+  assert.equal(shouldHandlePaste(code, "<meta charset='utf-8'><div class=\"highlight\"><pre><code>x = 1\ny = 2</code></pre></div>", ""), true);
+  assert.equal(shouldHandlePaste(code, "<pre style=\"font-family:'JetBrains Mono',monospace;\">x = 1\ny = 2</pre>", ""), true);
+  // VS Code selection: monospace text styled white-space: pre.
+  assert.equal(shouldHandlePaste(code, "<div style=\"font-family: Menlo, monospace;white-space: pre;\"><div>x = 1</div><div>y = 2</div></div>", ""), true);
+  // Prose with inline <code>, Google Docs text (white-space: pre-wrap), and a page section with a <pre> block.
+  assert.equal(shouldHandlePaste(code, "<p>Use <code>fetch()</code> to load data.</p><p>It returns a promise.</p>", ""), false);
+  assert.equal(shouldHandlePaste(code, "<p><span style=\"font-family:Arial;white-space:pre;white-space:pre-wrap;\">Meeting notes</span></p>", ""), false);
+  assert.equal(shouldHandlePaste(code, "<h2>Install</h2><p>Run:</p><pre><code>npm install</code></pre>", ""), false);
   // Cursor inside an existing code block.
   assert.equal(shouldHandlePaste(code, "", "```python\n"), false);
   // Only labeled fences: nothing to add. An unlabeled one: annotate it.
@@ -42,6 +51,12 @@ test("padFences", () => {
   assert.equal(padFences(block, "before", "after"), `\n${block}\n`);
   // Text that does not start or end with a fence pastes as is.
   assert.equal(padFences("intro\n```\nx\n```\noutro", "before", "after"), "intro\n```\nx\n```\noutro");
+  // In a list item the block stays in the item: right after the marker, or on a new indented line.
+  assert.equal(padFences(block, "2. ", ""), "```py\n   x = 1\n   ```");
+  assert.equal(padFences(block, "- Run this: ", "and more"), "\n  ```py\n  x = 1\n  ```\n  ");
+  assert.equal(padFences(block, "\t- ", ""), "```py\n\t  x = 1\n\t  ```");
+  // Not a list marker: no space after it.
+  assert.equal(padFences(block, "-5 degrees ", ""), `\n${block}`);
 });
 
 test("parseUnlabeledCodeFences", () => {

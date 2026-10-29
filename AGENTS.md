@@ -195,7 +195,7 @@ Obsidian's automated review runs [eslint-plugin-obsidianmd](https://github.com/o
 
 - Install `eslint` and `eslint-plugin-obsidianmd` as dev dependencies. The plugin brings its own `typescript-eslint` and `@eslint/js`.
 - In `eslint.config.mjs`, spread `obsidianmd.configs.recommended` and set `languageOptions.parserOptions.projectService: true` (its rules need type information).
-- Lint the same files as the scanner, which only checks plugin source. It skips build output, `*.cjs`/`*.mjs`/`*.mts` files, build scripts such as `esbuild.config.mjs`, and test folders. Vendored code belongs in a `.cjs` file with a `.d.cts` type file next to it.
+- Lint the same files as the scanner, which only checks plugin source. It skips build output, `*.cjs`/`*.mjs`/`*.cts`/`*.mts` files, build scripts such as `esbuild.config.mjs`, and test folders. Vendored code belongs in a `.cjs` file with a `.d.cts` type file next to it.
 - Add `"lint": "eslint ."` to `package.json` and keep it free of errors and warnings. Fix the code rather than disabling rules. The scanner sees disable comments.
 - Typical fixes:
   - Type the result of `loadData()` instead of passing `any` around.

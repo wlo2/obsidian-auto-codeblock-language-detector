@@ -17,7 +17,7 @@ It runs entirely offline and intelligently filters languages to provide highly a
 
 When you paste text or run the **Detect languages in current note** command, the plugin first finds unlabeled code fences or treats a plain multi-line paste as a candidate block.
 
-Some pastes are left to Obsidian on purpose: formatted text copied from a web page (so Obsidian can convert it to Markdown), pastes while the cursor is already inside a code block, and pastes whose code fences all have a language already.
+Some pastes are left to Obsidian on purpose: formatted text copied from a web page or a document (so Obsidian can convert it to Markdown), pastes while the cursor is already inside a code block, and pastes whose code fences all have a language already. Code copied from an editor such as VS Code or a JetBrains IDE, or from a code block on a web page, is still labeled. Code pasted into a list item stays inside that item.
 
 Before the Guesslang model runs, the plugin applies a lightweight prose filter. It counts common prose words, sentence-ending lines, punctuation, paragraph breaks, long lines, indented detail-list lines, code keywords, assignments, and code operators. A block is rejected as prose only when it has strong natural-language signals and weak code signals. This keeps ordinary paragraphs, long-form notes, and paragraph-plus-detail-list notes from being labeled as languages while still allowing compact code samples through to the model.
 

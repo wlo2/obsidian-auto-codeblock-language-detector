@@ -1,6 +1,6 @@
 import { App, Modal, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import type AutoCodeblockLanguageDetectorPlugin from "./main";
-import { ALL_LANGUAGES, DEFAULT_SETTINGS } from "./settings";
+import { ALL_LANGUAGES, DEFAULT_SETTINGS, isLanguageEnabled, setLanguageEnabled } from "./settings";
 
 // Each language toggle uses the key "language:<id>". It is stored inverted, in
 // disabledLanguageIds, so settings saved by older versions keep working.
@@ -68,7 +68,7 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
 
   getControlValue(key: string): unknown {
     if (key.startsWith(LANGUAGE_KEY_PREFIX)) {
-      return !this.plugin.settings.disabledLanguageIds.includes(key.slice(LANGUAGE_KEY_PREFIX.length));
+      return isLanguageEnabled(this.plugin.settings.disabledLanguageIds, key.slice(LANGUAGE_KEY_PREFIX.length));
     }
 
     return super.getControlValue(key);
@@ -79,10 +79,9 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
       return super.setControlValue(key, value);
     }
 
-    const id = key.slice(LANGUAGE_KEY_PREFIX.length);
-    const others = this.plugin.settings.disabledLanguageIds.filter((disabledId) => disabledId !== id);
-    // A new array, never a mutation: the list may still be DEFAULT_SETTINGS' own array.
-    this.plugin.settings.disabledLanguageIds = value ? others : [...others, id];
+    this.plugin.settings.disabledLanguageIds = setLanguageEnabled(
+      this.plugin.settings.disabledLanguageIds, key.slice(LANGUAGE_KEY_PREFIX.length), value === true
+    );
     await this.plugin.saveSettings();
   }
 }

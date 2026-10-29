@@ -58,6 +58,17 @@ export function isInsideCodeFence(markdown: string): boolean {
   return openToken !== null;
 }
 
+/**
+ * Whether copied HTML is only code: all visible text sits in <pre> (IDEs, code blocks on web
+ * pages), or it is monospace text with white-space: pre (VS Code). Inline <code> in prose and
+ * editors that style all text white-space: pre-wrap (Google Docs) don't count.
+ */
+function isCodeHtml(html: string): boolean {
+  const textOutsidePre = html.replace(/<pre\b[\s\S]*?<\/pre>/gi, "").replace(/<[^>]*>/g, "").trim();
+  return (/<pre\b/i.test(html) && textOutsidePre === "") ||
+    (/white-space:\s*pre\s*[;"']/i.test(html) && /monospace/i.test(html));
+}
+
 /** Whether the plugin should take over a paste instead of letting Obsidian paste it normally. */
 export function shouldHandlePaste(text: string, html: string, textBeforeCursor: string): boolean {
   if (text.trim().split("\n").length < 2) {
@@ -65,8 +76,8 @@ export function shouldHandlePaste(text: string, html: string, textBeforeCursor: 
   }
 
   // Leave rich text to Obsidian's HTML-to-Markdown conversion.
-  // shortcut: guesses "code" from <pre>/<code>/white-space:pre markup, widen if some code source is missed.
-  if (html && !/<pre|<code|white-space:\s*pre/i.test(html)) {
+  // shortcut: guesses code from the HTML's markup, widen isCodeHtml if some code source is missed.
+  if (html && !isCodeHtml(html)) {
     return false;
   }
 
@@ -83,12 +94,16 @@ export function shouldHandlePaste(text: string, html: string, textBeforeCursor: 
  * Adds line breaks so a fence at the start or end of `text` gets its own line when it is
  * pasted between `textBefore` and `textAfter` (the rest of the cursor's line).
  * Otherwise the fence is not a fence, and the rest of the note turns into code.
+ * In a list item ("- ", "2. "), every line is indented to the item's text so the block stays in it.
  */
 export function padFences(text: string, textBefore: string, textAfter: string): string {
   const lines = text.split("\n");
-  const before = hasCodeFence(lines[0]) && textBefore.trim() ? "\n" : "";
-  const after = hasCodeFence(lines[lines.length - 1]) && textAfter.trim() ? "\n" : "";
-  return `${before}${text}${after}`;
+  const listMarker = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/.exec(textBefore)?.[0] ?? "";
+  // Tabs stay tabs and the marker becomes spaces, so the indent lines up with the item's text.
+  const newline = "\n" + listMarker.replace(/[^\t]/g, " ");
+  const before = hasCodeFence(lines[0]) && textBefore.slice(listMarker.length).trim() ? newline : "";
+  const after = hasCodeFence(lines[lines.length - 1]) && textAfter.trim() ? newline : "";
+  return before + lines.join(newline) + after;
 }
 
 export async function annotateMarkdownCodeFences(

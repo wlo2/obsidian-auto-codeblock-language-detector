@@ -12,7 +12,6 @@ const buildOptions = {
   logLevel: "info",
   sourcemap: isProduction ? false : "inline",
   minify: isProduction,
-  treeShaking: true,
   outfile: "main.js"
 };
 

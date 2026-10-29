@@ -1,5 +1,6 @@
 node_modules
 main.js
-main.js.map
 data.json
+# Design-hook session cache: holds absolute local paths.
+.impeccable/hook.cache.json
 .DS_Store

@@ -1,7 +1,6 @@
 import { LANGUAGE_ALIASES, MAGIKA_LABELS } from "../languageAliases";
 import { ALL_LANGUAGES, type PluginSettings } from "../settings";
 import type { MagikaModel } from "./magikaModel";
-import { looksLikeNaturalLanguage } from "./proseFilter";
 
 // Shorter snippets rarely hold enough code to tell languages apart.
 const MIN_CONTENT_SIZE = 20;
@@ -18,7 +17,7 @@ export class CodeLanguageDetector {
     await this.getModel();
   }
 
-  /** Frees the model: TensorFlow keeps it in a global engine that outlives the plugin. */
+  /** Frees the model and TensorFlow.js, which keeps both in a global engine that outlives the plugin. */
   async dispose(): Promise<void> {
     const modelPromise = this.modelPromise;
     this.modelPromise = undefined;
@@ -32,21 +31,17 @@ export class CodeLanguageDetector {
       return null;
     }
 
-    if (looksLikeNaturalLanguage(normalizedCode)) {
-      return null;
-    }
-
+    // Magika labels prose as plain text, so it needs no prose filter of its own.
     const model = await this.getModel();
-    const prediction = await model.predict(normalizedCode);
-    if (!prediction) {
+    const label = await model.predict(normalizedCode);
+    if (!label) {
       return null;
     }
 
-    const { confidenceThreshold, disabledLanguageIds } = this.getSettings();
-    const id = MAGIKA_LABELS[prediction.label] ?? prediction.label;
+    const id = MAGIKA_LABELS[label] ?? label;
 
-    // Plain text, binary formats and Magika types without a setting (diff, vue, ...) stay unlabeled.
-    if (!LANGUAGE_IDS.has(id) || disabledLanguageIds.includes(id) || prediction.score < confidenceThreshold) {
+    // Plain text, documents, binary formats and other Magika types without a setting stay unlabeled.
+    if (!LANGUAGE_IDS.has(id) || this.getSettings().disabledLanguageIds.includes(id)) {
       return null;
     }
 
@@ -54,13 +49,10 @@ export class CodeLanguageDetector {
   }
 
   private getModel(): Promise<MagikaModel> {
-    // The first prediction compiles the model for the GPU, so warm it up here, once.
     this.modelPromise ??= (async () => {
       // Imported here, not at the top: running TensorFlow.js and the 3 MB model would slow down plugin load.
       const { MagikaModel } = await import("./magikaModel");
-      const model = await MagikaModel.load();
-      await model.predict("x".repeat(MIN_CONTENT_SIZE));
-      return model;
+      return MagikaModel.load();
     })().catch((error) => {
       this.modelPromise = undefined; // let the next call retry
       throw error;

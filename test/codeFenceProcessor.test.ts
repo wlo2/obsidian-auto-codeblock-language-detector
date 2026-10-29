@@ -17,6 +17,9 @@ test("isInsideCodeFence", () => {
   // Fences nested in list items, indented with spaces or tabs.
   assert.equal(isInsideCodeFence("1. Step\n    ```bash\n    ls\n"), true);
   assert.equal(isInsideCodeFence("1. Step\n\t```bash\n\tls\n\t```\n"), false);
+  // Fences in callouts and quotes.
+  assert.equal(isInsideCodeFence("> [!note]\n> ```python\n> x = 1\n> "), true);
+  assert.equal(isInsideCodeFence("> ```python\n> x = 1\n> ```\n> "), false);
 });
 
 test("shouldHandlePaste", () => {
@@ -37,6 +40,7 @@ test("shouldHandlePaste", () => {
   assert.equal(shouldHandlePaste(code, "<h2>Install</h2><p>Run:</p><pre><code>npm install</code></pre>", ""), false);
   // Cursor inside an existing code block.
   assert.equal(shouldHandlePaste(code, "", "```python\n"), false);
+  assert.equal(shouldHandlePaste(code, "", "> [!note]\n> ```python\n> "), false);
   // Only labeled fences: nothing to add. An unlabeled one: annotate it.
   assert.equal(shouldHandlePaste("```py\nx = 1\n```", "", ""), false);
   assert.equal(shouldHandlePaste("```\nx = 1\n```", "", ""), true);
@@ -57,6 +61,10 @@ test("padFences", () => {
   assert.equal(padFences(block, "\t- ", ""), "```py\n\t  x = 1\n\t  ```");
   // Not a list marker: no space after it.
   assert.equal(padFences(block, "-5 degrees ", ""), `\n${block}`);
+  // In a callout every line keeps the "> ", also after the callout's title and in a list inside it.
+  assert.equal(padFences(block, "> ", ""), "```py\n> x = 1\n> ```");
+  assert.equal(padFences(block, "> [!note] Run: ", "more"), "\n> ```py\n> x = 1\n> ```\n> ");
+  assert.equal(padFences(block, "> > - ", ""), "```py\n> >   x = 1\n> >   ```");
 });
 
 test("parseUnlabeledCodeFences", () => {
@@ -67,8 +75,10 @@ test("parseUnlabeledCodeFences", () => {
   assert.deepEqual(parseUnlabeledCodeFences("````\n```\ninner\n```\n````"), [{ code: "```\ninner\n```", fenceToken: "````", startLine: 0 }]);
   // Inline ```js``` is not a fence, so the block after it is still found.
   assert.deepEqual(parseUnlabeledCodeFences("```js``` x\n```\nb = 2\n```"), [{ code: "b = 2", fenceToken: "```", startLine: 1 }]);
-  // Fences nested in a list keep their indentation.
-  assert.deepEqual(parseUnlabeledCodeFences("- a\n    ```\n    ls\n    ```"), [{ code: "    ls", fenceToken: "    ```", startLine: 1 }]);
+  // Fences nested in a list or callout keep their indent or prefix; the code loses it.
+  assert.deepEqual(parseUnlabeledCodeFences("- a\n    ```\n    ls\n    ```"), [{ code: "ls", fenceToken: "    ```", startLine: 1 }]);
+  assert.deepEqual(parseUnlabeledCodeFences("- a\n\t```\n\tjobs:\n\t  test: 1\n\t```"), [{ code: "jobs:\n  test: 1", fenceToken: "\t```", startLine: 1 }]);
+  assert.deepEqual(parseUnlabeledCodeFences("> [!tip]\n> ```\n> a = 1\n>\n> b = 2\n> ```"), [{ code: "a = 1\n\nb = 2", fenceToken: "> ```", startLine: 1 }]);
   // Unclosed fences are not blocks.
   assert.deepEqual(parseUnlabeledCodeFences("```\nno end"), []);
 });

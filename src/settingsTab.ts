@@ -19,19 +19,6 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
 
     return [
       {
-        name: "Confidence threshold",
-        desc: "Minimum confidence score (0–1) required to label a code block. " +
-          "Lower values detect more blocks but may be less accurate.",
-        control: {
-          type: "slider",
-          key: "confidenceThreshold",
-          min: 0.05,
-          max: 0.95,
-          step: 0.05,
-          displayFormat: (value) => value.toFixed(2),
-        },
-      },
-      {
         type: "group",
         heading: "Languages",
         search: {
@@ -48,10 +35,10 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
       },
       {
         name: "Reset to defaults",
-        desc: "Restore the default language list and confidence threshold.",
+        desc: "Restore the default language list.",
         // The whole row is clickable, so ask before throwing away the user's choices.
         action: () => {
-          new ConfirmModal(this.app, "Reset the confidence threshold and language list to their defaults?", () => {
+          new ConfirmModal(this.app, "Reset the language list to its defaults?", () => {
             void this.resetToDefaults();
           }).open();
         },
@@ -61,7 +48,6 @@ export class AutoCodeblockSettingTab extends PluginSettingTab {
 
   private async resetToDefaults(): Promise<void> {
     this.plugin.settings.disabledLanguageIds = [...DEFAULT_SETTINGS.disabledLanguageIds];
-    this.plugin.settings.confidenceThreshold = DEFAULT_SETTINGS.confidenceThreshold;
     await this.plugin.saveSettings();
     this.update();
   }

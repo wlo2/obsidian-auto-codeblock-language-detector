@@ -18,11 +18,12 @@ interface FenceLine {
 }
 
 /**
- * Parses a fence line, or returns null. Any indentation is allowed so fences nested in
- * list items count; a backtick fence whose info string has a backtick is inline code.
+ * Parses a fence line, or returns null. Any indentation and quote prefix ("> ") is allowed so
+ * fences nested in list items and callouts count; a backtick fence whose info string has a
+ * backtick is inline code.
  */
 function matchFence(line: string): FenceLine | null {
-  const match = line.match(/^([ \t]*)(`{3,}|~{3,})(.*)$/);
+  const match = line.match(/^((?:[ \t]*>)*[ \t]*)(`{3,}|~{3,})(.*)$/);
   if (!match || (match[2][0] === "`" && match[3].includes("`"))) {
     return null;
   }
@@ -36,10 +37,6 @@ function closesFence(line: FenceLine | null, openToken: string): boolean {
 
 export function hasCodeFence(markdown: string): boolean {
   return markdown.split("\n").some((line) => matchFence(line) !== null);
-}
-
-export function containsUnlabeledCodeFence(markdown: string): boolean {
-  return parseUnlabeledCodeFences(markdown).length > 0;
 }
 
 /** True when the end of `markdown` (e.g. the text before the cursor) sits inside an open fenced block. */
@@ -87,21 +84,22 @@ export function shouldHandlePaste(text: string, html: string, textBeforeCursor: 
   }
 
   // Fences that are all labeled already: nothing to add, paste as is.
-  return !hasCodeFence(text) || containsUnlabeledCodeFence(text);
+  return !hasCodeFence(text) || parseUnlabeledCodeFences(text).length > 0;
 }
 
 /**
  * Adds line breaks so a fence at the start or end of `text` gets its own line when it is
  * pasted between `textBefore` and `textAfter` (the rest of the cursor's line).
  * Otherwise the fence is not a fence, and the rest of the note turns into code.
- * In a list item ("- ", "2. "), every line is indented to the item's text so the block stays in it.
+ * In a callout or quote ("> ") every line repeats the prefix, and in a list item ("- ", "2. ")
+ * every line is indented to the item's text, so the block stays in it.
  */
 export function padFences(text: string, textBefore: string, textAfter: string): string {
   const lines = text.split("\n");
-  const listMarker = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/.exec(textBefore)?.[0] ?? "";
+  const [, quote, listMarker] = /^((?:[ \t]*>[ \t]?)*)((?:[ \t]*(?:[-*+]|\d+[.)])[ \t]+)?)/.exec(textBefore) ?? ["", "", ""];
   // Tabs stay tabs and the marker becomes spaces, so the indent lines up with the item's text.
-  const newline = "\n" + listMarker.replace(/[^\t]/g, " ");
-  const before = hasCodeFence(lines[0]) && textBefore.slice(listMarker.length).trim() ? newline : "";
+  const newline = "\n" + quote + listMarker.replace(/[^\t]/g, " ");
+  const before = hasCodeFence(lines[0]) && textBefore.slice(quote.length + listMarker.length).trim() ? newline : "";
   const after = hasCodeFence(lines[lines.length - 1]) && textAfter.trim() ? newline : "";
   return before + lines.join(newline) + after;
 }
@@ -150,8 +148,13 @@ export function parseUnlabeledCodeFences(markdown: string): CodeFenceBlock[] {
 
     // Labeled blocks are skipped whole, so their closing fence is not read as a new opener.
     if (opening.info === "") {
+      // Without the list indent or callout prefix: they belong to the note, and they confuse detection
+      // (tab-indented YAML reads as a Makefile). A shorter prefix (">" on a blank line) is a blank line.
+      const code = lines.slice(lineIndex + 1, closingLineIndex).map((line) =>
+        line.startsWith(opening.indent) ? line.slice(opening.indent.length) : opening.indent.startsWith(line) ? "" : line
+      );
       blocks.push({
-        code: lines.slice(lineIndex + 1, closingLineIndex).join("\n"),
+        code: code.join("\n"),
         fenceToken: `${opening.indent}${opening.token}`,
         startLine: lineIndex
       });

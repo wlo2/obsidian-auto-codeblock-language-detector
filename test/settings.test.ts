@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { DEFAULT_SETTINGS, isLanguageEnabled, setLanguageEnabled } from "../src/settings.ts";
+import { DEFAULT_SETTINGS, isLanguageEnabled, parseSettings, setLanguageEnabled } from "../src/settings.ts";
+
+test("saved settings are checked", () => {
+  // Older versions also saved a confidence threshold, which is dropped.
+  assert.deepEqual(parseSettings({ confidenceThreshold: 0.15, disabledLanguageIds: ["go"] }), { disabledLanguageIds: ["go"] });
+  // Nothing saved yet, or a hand-edited file: the defaults.
+  for (const saved of [null, {}, "x", { disabledLanguageIds: "toml" }, { disabledLanguageIds: { go: true } }, { disabledLanguageIds: [1] }]) {
+    assert.deepEqual(parseSettings(saved), DEFAULT_SETTINGS);
+  }
+});
 
 test("language toggles map to the disabled list", () => {
   const defaults = [...DEFAULT_SETTINGS.disabledLanguageIds];

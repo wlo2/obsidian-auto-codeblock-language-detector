@@ -1,9 +1,9 @@
-import { Editor, EditorChange, Notice, Plugin } from "obsidian";
+import { Editor, EditorChange, EditorPosition, Notice, Plugin } from "obsidian";
 
 import { annotateMarkdownCodeFences, hasCodeFence, padFences, parseUnlabeledCodeFences, shouldHandlePaste } from "./markdown/codeFenceProcessor";
 import { CodeLanguageDetector } from "./services/codeLanguageDetector";
 import { AutoCodeblockSettingTab } from "./settingsTab";
-import { DEFAULT_SETTINGS, PluginSettings } from "./settings";
+import { DEFAULT_SETTINGS, parseSettings, PluginSettings } from "./settings";
 
 export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS };
@@ -47,12 +47,10 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
       })
     );
 
+    // Loads the model and compiles it for the GPU in the background, so the first paste doesn't wait.
+    // Runs right after Obsidian starts, or at once when the plugin is turned on later.
     this.app.workspace.onLayoutReady(() => {
-      const warmupTimer = window.setTimeout(() => {
-        void this.detector.preload().catch(() => undefined);
-      }, 1500);
-
-      this.register(() => window.clearTimeout(warmupTimer));
+      void this.detector.preload().catch(() => undefined);
     });
   }
 
@@ -61,8 +59,7 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const saved = (await this.loadData()) as Partial<PluginSettings> | null;
-    this.settings = { ...DEFAULT_SETTINGS, ...saved };
+    this.settings = parseSettings(await this.loadData());
   }
 
   async saveSettings(): Promise<void> {
@@ -73,6 +70,11 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
     editor: Editor,
     clipboardText: string
   ): Promise<void> {
+    // Detection can take a moment (the first paste waits for the model), so remember where the paste goes.
+    const note = editor.getValue();
+    const from = editor.getCursor("from");
+    const to = editor.getCursor("to");
+
     try {
       // Drop blank edge lines only; trim() would also eat the first line's indentation.
       const trimmedClip = clipboardText.replace(/^(?:[ \t]*\n)+/, "").trimEnd();
@@ -91,13 +93,17 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
         }
       }
 
+      // The user typed, moved the cursor or opened another note meanwhile: pasting now would land elsewhere.
+      if (editor.getValue() !== note || !samePosition(editor.getCursor("from"), from) || !samePosition(editor.getCursor("to"), to)) {
+        new Notice("The note changed during language detection, so nothing was pasted. Paste again.");
+        return;
+      }
+
       if (replacement === null) {
         editor.replaceSelection(clipboardText);
         return;
       }
 
-      const from = editor.getCursor("from");
-      const to = editor.getCursor("to");
       editor.replaceSelection(
         padFences(replacement, editor.getLine(from.line).slice(0, from.ch), editor.getLine(to.line).slice(to.ch))
       );
@@ -155,4 +161,8 @@ export default class AutoCodeblockLanguageDetectorPlugin extends Plugin {
     const blockLabel = changes.length === 1 ? "code block" : "code blocks";
     new Notice(`Detected languages for ${changes.length} ${blockLabel}.`);
   }
+}
+
+function samePosition(a: EditorPosition, b: EditorPosition): boolean {
+  return a.line === b.line && a.ch === b.ch;
 }
